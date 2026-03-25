@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>404 — 長照教育訓練系統</title>
+<script>
+  // GitHub Pages SPA redirect trick
+  const path = window.location.pathname
+  const search = window.location.search
+  sessionStorage.setItem('redirect', path + search)
+  window.location.replace(window.location.origin + window.location.pathname.split('/').slice(0,2).join('/') + '/')
+</script>
+</head>
+<body>重新導向中…</body>
+</html>

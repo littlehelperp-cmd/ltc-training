@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>課程簽到</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;background:#f8f9fa}
+.ci-card{background:#fff;border-radius:16px;padding:44px 32px;max-width:400px;width:100%;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.1)}
+.ci-icon{font-size:52px;margin-bottom:16px}
+.ci-title{font-size:20px;font-weight:600;margin-bottom:8px;color:var(--gray-900)}
+.ci-sub{font-size:14px;color:var(--gray-600);margin-bottom:20px}
+.ci-info{background:var(--gray-100);border-radius:8px;padding:14px;margin-bottom:20px;text-align:left;font-size:13px;line-height:1.8}
+</style>
+</head>
+<body>
+<div class="ci-card" id="card">
+  <div class="loading"><span class="spinner"></span>&nbsp;驗證中…</div>
+</div>
+<script src="../js/config.js"></script>
+<script>
+(async () => {
+  const p = new URLSearchParams(location.search)
+  const courseId = p.get('course')
+  const token    = p.get('t')
+  const card     = document.getElementById('card')
+
+  const show = (icon, title, sub, info='', extra='') =>
+    card.innerHTML = `<div class="ci-icon">${icon}</div><div class="ci-title">${title}</div><div class="ci-sub">${sub}</div>${info}${extra}`
+
+  if (!courseId || !token) { show('⚠️','無效的簽到連結','請重新掃描 QR Code'); return }
+
+  // 驗證 token（當天有效）
+  try {
+    const decoded = atob(token)
+    if (!decoded.startsWith(courseId) || !decoded.includes(new Date().toDateString()))
+      { show('⏰','QR Code 已失效','每日上課時間產生新碼，請洽主辦單位'); return }
+  } catch { show('⚠️','連結錯誤',''); return }
+
+  const { data: course } = await supabase.from('courses').select('*').eq('id',courseId).single()
+  if (!course) { show('❌','課程不存在',''); return }
+
+  const { data: { session } } = await supabase.auth.getSession()
+  const infoHtml = `<div class="ci-info">
+    <div>課程：<strong>${course.title}</strong></div>
+    <div>日期：<strong>${new Date(course.date).toLocaleDateString('zh-TW')}</strong></div>
+    <div>地點：<strong>${course.location}</strong></div>
+    <div>積分：<strong>${course.credits} 分</strong></div>
+  </div>`
+
+  if (!session) {
+    show('📱','請先登入','登入後才能完成簽到', infoHtml,
+      `<a href="${BASE_PATH}/index.html?redirect=${encodeURIComponent(location.href)}" class="btn-primary full-width">前往登入</a>`)
+    return
+  }
+
+  const uid = session.user.id
+  const { data: enroll } = await supabase.from('enrollments').select('*')
+    .eq('user_id',uid).eq('course_id',courseId).eq('status','enrolled').maybeSingle()
+
+  if (!enroll) {
+    show('❌','您未報名此課程','僅正取學員可簽到', infoHtml,
+      `<a href="${BASE_PATH}/pages/student.html" class="btn-secondary full-width" style="margin-top:12px">返回學員頁面</a>`)
+    return
+  }
+
+  if (enroll.attended) {
+    show('✅','已完成簽到','您已出席本課程', infoHtml,
+      `<div class="success-msg" style="margin-bottom:12px">簽到時間：${new Date(enroll.attended_at).toLocaleTimeString('zh-TW')}</div>
+       <a href="${BASE_PATH}/pages/student.html" class="btn-secondary full-width">返回學員頁面</a>`)
+    return
+  }
+
+  // 執行簽到
+  const { error } = await supabase.from('enrollments')
+    .update({attended:true, attended_at:new Date().toISOString()}).eq('id',enroll.id)
+
+  if (error) { show('⚠️','簽到失敗','請重新整理頁面再試'); return }
+
+  const { data: prof } = await supabase.from('profiles').select('name').eq('id',uid).single()
+  card.innerHTML = `
+    <div class="ci-icon">🎉</div>
+    <div class="ci-title">簽到成功！</div>
+    <div class="ci-sub">${prof?.name||''}，歡迎參加課程</div>
+    ${infoHtml}
+    <div class="success-msg" style="margin-bottom:16px">出席積分課程結束後核入您的帳戶。</div>
+    <a href="${BASE_PATH}/pages/student.html" class="btn-primary full-width">返回學員頁面</a>
+  `
+})()
+</script>
+</body>
+</html>
