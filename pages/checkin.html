@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>課程簽到 — 長照教育訓練系統</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  body { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:20px; }
+  .checkin-card { background:#fff; border-radius:16px; padding:40px 32px; max-width:400px; width:100%; text-align:center; box-shadow:0 4px 24px rgba(0,0,0,0.1); }
+  .checkin-icon { font-size:48px; margin-bottom:16px; }
+  .checkin-title { font-size:20px; font-weight:600; margin-bottom:8px; }
+  .checkin-sub { font-size:14px; color:var(--gray-600); margin-bottom:24px; }
+  .checkin-info { background:var(--gray-100); border-radius:8px; padding:14px; margin-bottom:20px; text-align:left; font-size:13px; }
+  .checkin-info div { margin-bottom:4px; color:var(--gray-600); }
+  .checkin-info strong { color:var(--gray-900); }
+</style>
+</head>
+<body>
+<div class="checkin-card" id="checkin-card">
+  <div class="loading"><div class="spinner"></div>驗證中...</div>
+</div>
+
+<script src="../js/config.js"></script>
+<script>
+window.addEventListener('DOMContentLoaded', async () => {
+  const params = new URLSearchParams(window.location.search)
+  const courseId = params.get('course')
+  const token = params.get('token')
+
+  const card = document.getElementById('checkin-card')
+
+  if (!courseId || !token) {
+    card.innerHTML = `<div class="checkin-icon">⚠️</div><div class="checkin-title">無效的簽到連結</div>`
+    return
+  }
+
+  // 驗證 token（日期匹配即有效）
+  try {
+    const decoded = atob(token)
+    const expectedDate = new Date().toDateString()
+    if (!decoded.includes(courseId) || !decoded.includes(expectedDate)) {
+      card.innerHTML = `<div class="checkin-icon">⏰</div>
+        <div class="checkin-title">QR Code 已過期</div>
+        <div class="checkin-sub">請洽主辦單位取得今日最新 QR Code</div>`
+      return
+    }
+  } catch {
+    card.innerHTML = `<div class="checkin-icon">⚠️</div><div class="checkin-title">無效的簽到連結</div>`
+    return
+  }
+
+  // 取得課程資訊
+  const { data: course } = await supabase.from('courses').select('*').eq('id', courseId).single()
+  if (!course) {
+    card.innerHTML = `<div class="checkin-icon">❌</div><div class="checkin-title">課程不存在</div>`
+    return
+  }
+
+  // 確認是否已登入
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) {
+    // 未登入：顯示引導
+    card.innerHTML = `
+      <div class="checkin-icon">📱</div>
+      <div class="checkin-title">${course.title}</div>
+      <div class="checkin-sub">請先登入系統才能完成簽到</div>
+      <div class="checkin-info">
+        <div>📅 <strong>${new Date(course.date).toLocaleDateString('zh-TW')}</strong></div>
+        <div>📍 <strong>${course.location}</strong></div>
+      </div>
+      <a href="../index.html?redirect=${encodeURIComponent(window.location.href)}" class="btn-primary full-width">登入並簽到</a>
+    `
+    return
+  }
+
+  const userId = session.user.id
+
+  // 確認是否有報名
+  const { data: enrollment } = await supabase
+    .from('enrollments')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('course_id', courseId)
+    .eq('status', 'enrolled')
+    .single()
+
+  if (!enrollment) {
+    card.innerHTML = `
+      <div class="checkin-icon">❌</div>
+      <div class="checkin-title">您未報名此課程</div>
+      <div class="checkin-sub">僅限正取學員才能簽到</div>
+      <a href="student.html" class="btn-secondary full-width" style="margin-top:16px">返回學員頁面</a>
+    `
+    return
+  }
+
+  if (enrollment.attended) {
+    const { data: profile } = await supabase.from('profiles').select('name').eq('id', userId).single()
+    card.innerHTML = `
+      <div class="checkin-icon">✅</div>
+      <div class="checkin-title">已完成簽到</div>
+      <div class="checkin-sub">${profile?.name || ''}，您已成功出席本課程！</div>
+      <div class="checkin-info">
+        <div>課程：<strong>${course.title}</strong></div>
+        <div>簽到時間：<strong>${new Date(enrollment.attended_at).toLocaleTimeString('zh-TW')}</strong></div>
+      </div>
+      <a href="student.html" class="btn-secondary full-width">返回學員頁面</a>
+    `
+    return
+  }
+
+  // 執行簽到
+  const { error } = await supabase.from('enrollments').update({
+    attended: true,
+    attended_at: new Date().toISOString()
+  }).eq('id', enrollment.id)
+
+  if (error) {
+    card.innerHTML = `<div class="checkin-icon">⚠️</div><div class="checkin-title">簽到失敗，請重試</div>`
+    return
+  }
+
+  const { data: profile } = await supabase.from('profiles').select('name').eq('id', userId).single()
+
+  card.innerHTML = `
+    <div class="checkin-icon">🎉</div>
+    <div class="checkin-title">簽到成功！</div>
+    <div class="checkin-sub">${profile?.name || ''}，歡迎參加課程</div>
+    <div class="checkin-info">
+      <div>課程：<strong>${course.title}</strong></div>
+      <div>日期：<strong>${new Date(course.date).toLocaleDateString('zh-TW')}</strong></div>
+      <div>地點：<strong>${course.location}</strong></div>
+      <div>積分：<strong>${course.credits} 分</strong></div>
+      <div>簽到時間：<strong>${new Date().toLocaleTimeString('zh-TW')}</strong></div>
+    </div>
+    <div class="success-msg">出席積分將在課程結束後核入您的帳戶。</div>
+    <a href="student.html" class="btn-primary full-width" style="margin-top:8px">返回學員頁面</a>
+  `
+})
+</script>
+</body>
+</html>

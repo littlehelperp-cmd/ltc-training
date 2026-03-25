@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>長照教育訓練系統</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="auth-page">
+
+<div class="auth-container">
+  <div class="auth-brand">
+    <div class="brand-badge">長照</div>
+    <h1 class="brand-title">教育訓練管理系統</h1>
+    <p class="brand-sub">Long-Term Care Training Platform</p>
+  </div>
+
+  <div class="auth-card">
+    <div class="tab-group">
+      <button class="tab-btn active" onclick="switchTab('login')">登入</button>
+      <button class="tab-btn" onclick="switchTab('register')">學員註冊</button>
+    </div>
+
+    <!-- 登入 -->
+    <form id="login-form" onsubmit="handleLogin(event)">
+      <div class="form-field">
+        <label>電子信箱</label>
+        <input type="email" id="login-email" required placeholder="name@example.com">
+      </div>
+      <div class="form-field">
+        <label>密碼</label>
+        <input type="password" id="login-password" required placeholder="請輸入密碼">
+      </div>
+      <div id="login-error" class="error-msg" style="display:none"></div>
+      <button type="submit" class="btn-primary full-width" id="login-btn">登入</button>
+    </form>
+
+    <!-- 註冊 -->
+    <form id="register-form" style="display:none" onsubmit="handleRegister(event)">
+      <div class="form-grid-2">
+        <div class="form-field">
+          <label>姓名 <span class="req">*</span></label>
+          <input type="text" id="reg-name" required placeholder="真實姓名">
+        </div>
+        <div class="form-field">
+          <label>身分證字號 <span class="req">*</span></label>
+          <input type="text" id="reg-id-number" required placeholder="A123456789" maxlength="10">
+        </div>
+        <div class="form-field">
+          <label>服務機構 <span class="req">*</span></label>
+          <input type="text" id="reg-org" required placeholder="機構名稱">
+        </div>
+        <div class="form-field">
+          <label>機構別</label>
+          <select id="reg-org-type">
+            <option value="">請選擇</option>
+            <option value="A單位">A 單位</option>
+            <option value="B單位">B 單位</option>
+            <option value="C單位">C 單位</option>
+            <option value="其他">其他</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>電子信箱 <span class="req">*</span></label>
+          <input type="email" id="reg-email" required placeholder="name@example.com">
+        </div>
+        <div class="form-field">
+          <label>密碼 <span class="req">*</span></label>
+          <input type="password" id="reg-password" required placeholder="至少 8 碼" minlength="8">
+        </div>
+        <div class="form-field span-2">
+          <label>照顧服務員證照字號</label>
+          <input type="text" id="reg-license" placeholder="選填">
+        </div>
+      </div>
+      <div id="reg-error" class="error-msg" style="display:none"></div>
+      <div id="reg-success" class="success-msg" style="display:none">註冊成功！請查收確認信後登入。</div>
+      <button type="submit" class="btn-primary full-width" id="reg-btn">建立帳號</button>
+    </form>
+  </div>
+
+  <p class="auth-footer">主辦單位帳號請聯繫系統管理者開通</p>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+</body>
+</html>
