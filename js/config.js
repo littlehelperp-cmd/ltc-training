@@ -6,9 +6,9 @@
 // 防止重複載入
 if (typeof BASE_PATH === 'undefined') {
 
-  const SUPABASE_URL      = 'https://你的專案ID.supabase.co'
-  const SUPABASE_ANON_KEY = '你的 anon public key'
-  const BASE_PATH         = '/ltc-training'
+  const SUPABASE_URL = 'https://phhngxurdnuyqwaqnhci.supabase.co'
+  const SUPABASE_ANON_KEY = 'sb_publishable_2l1xRGFrgqyjyC8ygPAs_g_yAZVYziq'
+  const BASE_PATH = '/ltc-training'   
 
   window.SUPABASE_URL      = SUPABASE_URL
   window.SUPABASE_ANON_KEY = SUPABASE_ANON_KEY
