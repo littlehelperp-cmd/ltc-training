@@ -188,53 +188,35 @@ function exportRoster() {
 // ── QR 簽到 ─────────────────────────────────
 function loadQR() {
   qrCourseId = document.getElementById('qr-select').value
-  if (!qrCourseId) { document.getElementById('qr-panel').style.display='none'; return }
-  document.getElementById('qr-panel').style.display='block'
+  if (!qrCourseId) { document.getElementById('qr-panel').style.display = 'none'; return }
+  document.getElementById('qr-panel').style.display = 'block'
 
   const origin = window.location.origin
-  const url = `${origin}${BASE_PATH}/pages/checkin.html?course=${qrCourseId}&t=${btoa(qrCourseId+':'+new Date().toDateString())}`
-  QRCode.toCanvas(document.getElementById('qr-canvas'), url, { width:200, margin:2 }, ()=>{})
-  document.getElementById('qr-link-box').style.display='none'
+  const url = `${origin}${window.BASE_PATH}/pages/checkin.html?course=${qrCourseId}&t=${btoa(qrCourseId + ':' + new Date().toDateString())}`
+
+  // 儲存連結供複製用
   document.getElementById('qr-link-box').textContent = url
+
+  // 清空舊的 canvas 再重畫
+  const canvas = document.getElementById('qr-canvas')
+  const ctx = canvas.getContext('2d')
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+  // 等 QRCode library 確實載入後再執行
+  function tryRender(retries) {
+    if (typeof QRCode !== 'undefined') {
+      QRCode.toCanvas(canvas, url, { width: 200, margin: 2 }, (err) => {
+        if (err) console.error('QR 產生失敗:', err)
+      })
+    } else if (retries > 0) {
+      setTimeout(() => tryRender(retries - 1), 200)
+    } else {
+      console.error('QRCode library 未載入')
+    }
+  }
+  tryRender(10)
+
   loadAtt()
-}
-
-async function loadAtt() {
-  const { data } = await supabase.from('enrollments').select('*').eq('course_id',qrCourseId).eq('status','enrolled')
-  const attended = (data||[]).filter(r=>r.attended)
-  const absent   = (data||[]).filter(r=>!r.attended)
-  document.getElementById('att-count').textContent = attended.length
-  document.getElementById('abs-count').textContent = absent.length
-  document.getElementById('att-tbody').innerHTML = (data||[]).map(r=>`
-    <tr>
-      <td>${r.name_snapshot||'—'}</td>
-      <td>${r.org_snapshot||'—'}</td>
-      <td>${r.attended ? new Date(r.attended_at).toLocaleTimeString('zh-TW') : '<span class="text-muted">未到</span>'}</td>
-      <td>${!r.attended ? `<button class="btn-secondary btn-sm" onclick="markAtt('${r.id}')">手動簽到</button>` : '<span style="color:var(--green-500)">✓</span>'}</td>
-    </tr>`).join('')
-}
-
-async function markAtt(id) {
-  await supabase.from('enrollments').update({attended:true, attended_at:new Date().toISOString()}).eq('id',id)
-  await loadAtt()
-}
-
-function refreshAtt() { loadAtt() }
-
-function dlQR() {
-  const c = document.getElementById('qr-canvas')
-  const a = Object.assign(document.createElement('a'), { download:'QR_簽到.png', href:c.toDataURL() })
-  a.click()
-}
-
-function copyQRLink() {
-  const box = document.getElementById('qr-link-box')
-  const url = box.textContent
-  if (!url) { loadQR(); setTimeout(copyQRLink, 300); return }
-  navigator.clipboard.writeText(url).then(() => {
-    box.style.display = 'block'
-    box.textContent = '✓ 已複製連結：' + url
-  })
 }
 
 // ── 報表 ────────────────────────────────────
