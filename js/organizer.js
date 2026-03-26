@@ -94,7 +94,11 @@ function renderCourses() {
       <div class="course-actions">
         ${badge}
         <button class="btn-secondary btn-sm" onclick="openRoster('${c.id}','${c.title.replace(/'/g, '\u2019')}')">名單</button>
-        ${!c.is_published ? `<button class="btn-primary btn-sm" onclick="publishCourse('${c.id}')">發布</button>` : ''}
+        ${!c.is_published
+          ? `<button class="btn-primary btn-sm" onclick="publishCourse('${c.id}')">發布</button>`
+          : ''}
+        <button class="btn-secondary btn-sm" style="color:var(--red-500);border-color:var(--red-500)"
+          onclick="deleteCourse('${c.id}','${c.title.replace(/'/g, '\u2019')}')">刪除</button>
       </div>
     </div>`
   }).join('')
@@ -356,4 +360,15 @@ function dlCSV(rows, name) {
 
 function fmtDate(d) {
   return d ? new Date(d).toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' }) : '—'
+}
+
+async function deleteCourse(id, title) {
+  if (!confirm(`確定要刪除「${title}」嗎？\n\n刪除後報名資料也會一併移除，無法復原。`)) return
+
+  const { error } = await supabase.from('courses').delete().eq('id', id)
+  if (error) {
+    alert('刪除失敗：' + error.message)
+    return
+  }
+  await loadAll()
 }
