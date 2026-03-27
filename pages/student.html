@@ -3,27 +3,38 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>學員專區 — 長照教育訓練系統</title>
+<title>學員專區 — 樂晨學苑教育訓練系統</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
 <div class="app-wrapper">
+
   <header class="topbar">
-    <div class="topbar-logo"><span class="badge">長照</span>教育訓練系統</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button class="hamburger" id="hamburger" onclick="toggleSidebar()" aria-label="選單">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="topbar-logo"><span class="badge">樂晨學苑</span>教育訓練系統</div>
+    </div>
     <div class="topbar-right">
       <span class="user-info">學員：<strong id="user-name">載入中…</strong></span>
       <button class="btn-secondary btn-sm" onclick="logout()">登出</button>
     </div>
   </header>
+
+  <!-- 手機遮罩 -->
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
   <div class="main-layout">
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <div class="nav-label">我的學習</div>
       <div class="nav-item active" onclick="showPage('dashboard',this)"><span class="icon">◈</span>總覽</div>
       <div class="nav-item" onclick="showPage('courses',this)"><span class="icon">📋</span>瀏覽課程</div>
       <div class="nav-item" onclick="showPage('enrollments',this)"><span class="icon">📌</span>我的報名</div>
       <div class="nav-item" onclick="showPage('credits',this)"><span class="icon">⭐</span>積分查詢</div>
     </aside>
+
     <main class="content">
 
       <!-- 總覽 -->
@@ -50,11 +61,11 @@
       <!-- 瀏覽課程 -->
       <section class="page-section" id="page-courses">
         <div class="page-header"><h2 class="page-title">課程報名</h2></div>
-        <div class="flex gap-2 mb-4" style="flex-wrap:wrap">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
           <input id="s-search" placeholder="搜尋課程…" oninput="filterCourses()"
-            style="padding:8px 12px;border:1px solid #e8eaed;border-radius:6px;font-size:13px;width:200px">
+            style="padding:8px 12px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;flex:1;min-width:140px">
           <select id="s-cat" onchange="filterCourses()"
-            style="padding:8px 12px;border:1px solid #e8eaed;border-radius:6px;font-size:13px">
+            style="padding:8px 12px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px">
             <option value="">全部類別</option>
             <option>直接服務類</option><option>專業知識類</option><option>品質管理類</option>
           </select>
@@ -69,7 +80,7 @@
           <div class="table-wrap">
             <table>
               <thead><tr><th>課程名稱</th><th>日期</th><th>地點</th><th>積分</th><th>狀態</th><th>出席</th></tr></thead>
-              <tbody id="enroll-tbody"><tr><td colspan="6" class="loading">載入中…</td></tr></tbody>
+              <tbody id="enroll-tbody"><tr><td colspan="6" class="loading"><span class="spinner"></span>載入中…</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -79,13 +90,16 @@
       <section class="page-section" id="page-credits">
         <div class="page-header"><h2 class="page-title">長照積分查詢</h2></div>
         <div class="grid-2">
-          <div class="card"><div class="card-title">積分總覽</div><div id="credits-summary"><div class="loading"><span class="spinner"></span>載入中…</div></div></div>
+          <div class="card">
+            <div class="card-title">積分總覽</div>
+            <div id="credits-summary"><div class="loading"><span class="spinner"></span>載入中…</div></div>
+          </div>
           <div class="card">
             <div class="card-title">積分明細</div>
             <div class="table-wrap">
               <table>
                 <thead><tr><th>日期</th><th>課程</th><th>積分</th><th>狀態</th></tr></thead>
-                <tbody id="credits-tbody"><tr><td colspan="4" class="loading">載入中…</td></tr></tbody>
+                <tbody id="credits-tbody"><tr><td colspan="4" class="loading"><span class="spinner"></span>載入中…</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -107,7 +121,10 @@
         <div class="form-field"><label>身分證字號 <span class="req">*</span></label><input type="text" id="e-id" required maxlength="10"></div>
         <div class="form-field"><label>服務機構</label><input type="text" id="e-org"></div>
         <div class="form-field"><label>機構別</label>
-          <select id="e-org-type"><option value="">請選擇</option><option>A單位</option><option>B單位</option><option>C單位</option><option>其他</option></select>
+          <select id="e-org-type">
+            <option value="">請選擇</option>
+            <option>A單位</option><option>B單位</option><option>C單位</option><option>其他</option>
+          </select>
         </div>
         <div class="form-field span-2"><label>照顧服務員證照字號</label><input type="text" id="e-license" placeholder="選填"></div>
       </div>
@@ -124,5 +141,25 @@
 <script src="../js/config.js"></script>
 <script src="../js/auth.js"></script>
 <script src="../js/student.js"></script>
+<script>
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar')
+  const hb = document.getElementById('hamburger')
+  const ov = document.getElementById('sidebar-overlay')
+  sb.classList.toggle('open')
+  hb.classList.toggle('open')
+  ov.classList.toggle('show')
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open')
+  document.getElementById('hamburger').classList.remove('open')
+  document.getElementById('sidebar-overlay').classList.remove('show')
+}
+document.querySelectorAll('.nav-item').forEach(el => {
+  el.addEventListener('click', () => {
+    if (window.innerWidth <= 768) closeSidebar()
+  })
+})
+</script>
 </body>
 </html>
