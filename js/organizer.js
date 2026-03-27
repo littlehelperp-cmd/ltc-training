@@ -1,4 +1,4 @@
-// organizer.js
+// organizer.js — 含資安強化（強 QR token）
 let me = null, myCourses = [], rosterRows = [], qrCourseId = null, qrUrl = ''
 
 window.addEventListener('DOMContentLoaded', async () => {
@@ -29,6 +29,15 @@ function showPage(id, el) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'))
   el?.classList.add('active')
   if (id === 'report') loadReport()
+}
+
+// ── 【資安】強化 QR Token 產生 ────────────────────────────
+// token 包含：courseId + organizerId前8碼 + 當天日期
+// 外人無法猜測 organizerId，大幅提升偽造難度
+function makeQRToken(courseId) {
+  const orgFragment = me.id.replace(/-/g, '').slice(0, 12)
+  const dateStr     = new Date().toISOString().split('T')[0]  // YYYY-MM-DD
+  return btoa([courseId, orgFragment, dateStr].join('|'))
 }
 
 // ── 儀表板 ────────────────────────────────────────────────
@@ -63,7 +72,8 @@ async function loadDashboard() {
       <td>${c.enrolled_count || 0} / ${c.max_participants}</td>
       <td><span class="badge ${!c.is_published ? 'badge-amber' : new Date(c.date) < now ? 'badge-gray' : 'badge-green'}">
         ${!c.is_published ? '草稿' : new Date(c.date) < now ? '已結束' : '開放中'}</span></td>
-      <td><button class="btn-secondary btn-sm" onclick="openRoster('${c.id}','${c.title.replace(/'/g, '\u2019')}')">名單</button></td>
+      <td><button class="btn-secondary btn-sm"
+        onclick="openRoster('${c.id}','${c.title.replace(/'/g, '\u2019')}')">名單</button></td>
     </tr>`).join('')
 }
 
@@ -84,18 +94,23 @@ function renderCourses() {
     const isPast = new Date(c.date) < now
     const badge  = !c.is_published
       ? '<span class="badge badge-amber">草稿</span>'
-      : isPast
-        ? '<span class="badge badge-gray">已結束</span>'
-        : '<span class="badge badge-green">開放中</span>'
+      : isPast ? '<span class="badge badge-gray">已結束</span>'
+               : '<span class="badge badge-green">開放中</span>'
     return `<div class="course-card">
       <div>
         <div class="course-name">${c.title}</div>
-        <div class="course-meta">${fmtDate(c.date)} · ${c.location} · ${c.hours}h · ${c.credits}積分 · 名額 ${c.enrolled_count || 0}/${c.max_participants}</div>
-        ${c.waitlist_count ? `<div class="course-meta" style="color:var(--blue-700)">候補 ${c.waitlist_count} 人</div>` : ''}
+        <div class="course-meta">
+          ${fmtDate(c.date)} · ${c.location} · ${c.hours}h ·
+          ${c.credits}積分 · 名額 ${c.enrolled_count || 0}/${c.max_participants}
+        </div>
+        ${c.waitlist_count
+          ? `<div class="course-meta" style="color:var(--blue-700)">候補 ${c.waitlist_count} 人</div>`
+          : ''}
       </div>
       <div class="course-actions">
         ${badge}
-        <button class="btn-secondary btn-sm" onclick="openRoster('${c.id}','${c.title.replace(/'/g, '\u2019')}')">名單</button>
+        <button class="btn-secondary btn-sm"
+          onclick="openRoster('${c.id}','${c.title.replace(/'/g, '\u2019')}')">名單</button>
         ${!c.is_published
           ? `<button class="btn-primary btn-sm" onclick="publishCourse('${c.id}')">發布</button>`
           : ''}
@@ -126,16 +141,16 @@ async function createCourse(e) {
 
   const { error } = await supabase.from('courses').insert({
     organizer_id:          me.id,
-    title:                 document.getElementById('c-title').value,
+    title:                 document.getElementById('c-title').value.trim(),
     category:              document.getElementById('c-cat').value,
-    location:              document.getElementById('c-loc').value,
+    location:              document.getElementById('c-loc').value.trim(),
     date:                  document.getElementById('c-date').value,
     start_time:            document.getElementById('c-time').value,
     hours:                 parseFloat(document.getElementById('c-hours').value),
     credits:               parseInt(document.getElementById('c-credits').value),
     max_participants:      parseInt(document.getElementById('c-max').value),
     registration_deadline: document.getElementById('c-deadline').value,
-    description:           document.getElementById('c-desc').value,
+    description:           document.getElementById('c-desc').value.trim(),
     is_published:          btn.value === 'publish',
     enrolled_count:        0,
     waitlist_count:        0,
@@ -173,7 +188,8 @@ async function deleteCourse(id, title) {
 async function openRoster(courseId, title) {
   document.getElementById('roster-title').textContent = '報名名單 — ' + title
   document.getElementById('roster-modal').style.display = 'flex'
-  document.getElementById('roster-tbody').innerHTML = '<tr><td colspan="7" class="loading">載入中…</td></tr>'
+  document.getElementById('roster-tbody').innerHTML =
+    '<tr><td colspan="7" class="loading"><span class="spinner"></span>載入中…</td></tr>'
 
   const { data } = await supabase.from('enrollments').select('*')
     .eq('course_id', courseId).order('created_at')
@@ -198,13 +214,14 @@ async function openRoster(courseId, title) {
           <td>${r.org_type_snapshot || '—'}</td>
           <td>${r.org_snapshot || '—'}</td>
           <td style="font-size:12px">${new Date(r.created_at).toLocaleString('zh-TW')}</td>
-          <td><span class="badge ${isWait ? 'badge-blue' : 'badge-green'}">${isWait ? '候補' : '正取'}</span></td>
+          <td><span class="badge ${isWait ? 'badge-blue' : 'badge-green'}">
+            ${isWait ? '候補' : '正取'}</span></td>
         </tr>`
       }).join('')
 }
 
 function exportRoster() {
-  const hdrs = ['序號', '姓名', '身分證', '機構別', '機構', '報名時間', '狀態']
+  const hdrs = ['序號', '姓名', '身分證（遮罩）', '機構別', '機構', '報名時間', '狀態']
   let regIdx = 0
   const rows = rosterRows.map(r => {
     const isWait = r.status === 'waitlisted'
@@ -219,27 +236,25 @@ function exportRoster() {
   dlCSV([hdrs, ...rows], '報名名單')
 }
 
-// ── QR 簽到 ───────────────────────────────────────────────
+// ── QR 簽到（強化 token）─────────────────────────────────
 function loadQR() {
   qrCourseId = document.getElementById('qr-select').value
   if (!qrCourseId) {
-    document.getElementById('qr-panel').style.display = 'none'
-    return
+    document.getElementById('qr-panel').style.display = 'none'; return
   }
   document.getElementById('qr-panel').style.display = 'block'
 
+  // 使用強化 token
+  const token = makeQRToken(qrCourseId)
   qrUrl = window.location.origin + window.BASE_PATH +
-    '/pages/checkin.html?course=' + qrCourseId +
-    '&t=' + btoa(qrCourseId + ':' + new Date().toDateString())
+    '/pages/checkin.html?course=' + qrCourseId + '&t=' + token
 
   document.getElementById('qr-link-box').style.display = 'none'
   document.getElementById('qr-link-box').textContent = qrUrl
 
-  // 清空舊的 QR
   const container = document.getElementById('qr-canvas')
   container.innerHTML = ''
 
-  // 用 qrcodejs（需要 div 容器）
   function tryRender(retries) {
     if (typeof QRCode !== 'undefined') {
       new QRCode(container, {
@@ -251,11 +266,11 @@ function loadQR() {
     } else if (retries > 0) {
       setTimeout(() => tryRender(retries - 1), 300)
     } else {
-      container.innerHTML = '<p style="color:var(--red-500);font-size:12px">QR Code 載入失敗，請重新整理頁面</p>'
+      container.innerHTML =
+        '<p style="color:var(--red-500);font-size:12px">QR Code 載入失敗，請重新整理頁面</p>'
     }
   }
   tryRender(15)
-
   loadAtt()
 }
 
@@ -294,12 +309,10 @@ async function markAtt(id) {
 function refreshAtt() { loadAtt() }
 
 function dlQR() {
-  // qrcodejs 產生的是 <img> 標籤
   const img = document.querySelector('#qr-canvas img')
   if (!img) { alert('請先選擇課程產生 QR Code'); return }
   const a = Object.assign(document.createElement('a'), {
-    download: 'QR_簽到.png',
-    href: img.src
+    download: 'QR_簽到.png', href: img.src
   })
   a.click()
 }
@@ -356,12 +369,9 @@ async function loadReport() {
     const m    = map[c.id] || { total: 0, att: 0 }
     const rate = m.total ? Math.round(m.att / m.total * 100) : null
     return `<tr>
-      <td>${c.title}</td>
-      <td>${fmtDate(c.date)}</td>
-      <td>${c.hours}h</td>
-      <td>${c.credits}</td>
-      <td>${c.enrolled_count || 0}</td>
-      <td>${m.att}</td>
+      <td>${c.title}</td><td>${fmtDate(c.date)}</td>
+      <td>${c.hours}h</td><td>${c.credits}</td>
+      <td>${c.enrolled_count || 0}</td><td>${m.att}</td>
       <td style="color:${rate !== null && rate >= 85 ? 'var(--green-500)' : 'var(--amber-500)'}">
         ${rate !== null ? rate + '%' : '—'}</td>
       <td>${c.waitlist_count || 0}</td>
@@ -371,7 +381,9 @@ async function loadReport() {
 
 function exportCSV() {
   const hdrs = ['課程名稱', '日期', '時數', '積分', '報名人數', '候補人數']
-  const rows = myCourses.map(c => [c.title, c.date, c.hours, c.credits, c.enrolled_count || 0, c.waitlist_count || 0])
+  const rows = myCourses.map(c => [
+    c.title, c.date, c.hours, c.credits, c.enrolled_count || 0, c.waitlist_count || 0
+  ])
   dlCSV([hdrs, ...rows], '課程統計報表')
 }
 
@@ -389,5 +401,7 @@ function dlCSV(rows, name) {
 }
 
 function fmtDate(d) {
-  return d ? new Date(d).toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' }) : '—'
+  return d
+    ? new Date(d).toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' })
+    : '—'
 }
