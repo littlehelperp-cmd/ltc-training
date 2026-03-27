@@ -1,5 +1,5 @@
-// organizer.js — 完整版
-let me = null, myCourses = [], rosterRows = [], qrCourseId = null
+// organizer.js
+let me = null, myCourses = [], rosterRows = [], qrCourseId = null, qrUrl = ''
 
 window.addEventListener('DOMContentLoaded', async () => {
   const { data: { session } } = await supabase.auth.getSession()
@@ -8,7 +8,9 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   const { data: p } = await supabase.from('profiles').select('name,role').eq('id', me.id).single()
   if (!p || !['organizer','admin'].includes(p.role)) {
-    alert('您沒有主辦單位權限'); window.location.href = window.BASE_PATH + '/index.html'; return
+    alert('您沒有主辦單位權限')
+    window.location.href = window.BASE_PATH + '/index.html'
+    return
   }
   document.getElementById('user-name').textContent = p.name || me.email
 
@@ -97,7 +99,8 @@ function renderCourses() {
         ${!c.is_published
           ? `<button class="btn-primary btn-sm" onclick="publishCourse('${c.id}')">發布</button>`
           : ''}
-        <button class="btn-secondary btn-sm" style="color:var(--red-500);border-color:var(--red-500)"
+        <button class="btn-secondary btn-sm"
+          style="color:var(--red-500);border-color:var(--red-500)"
           onclick="deleteCourse('${c.id}','${c.title.replace(/'/g, '\u2019')}')">刪除</button>
       </div>
     </div>`
@@ -153,6 +156,19 @@ async function publishCourse(id) {
   await loadAll()
 }
 
+// ── 刪除課程 ──────────────────────────────────────────────
+async function deleteCourse(id, title) {
+  const enrolled = myCourses.find(c => c.id === id)?.enrolled_count || 0
+  const msg = enrolled > 0
+    ? `「${title}」已有 ${enrolled} 人報名！\n刪除後報名紀錄一併移除，無法復原。\n確定要刪除嗎？`
+    : `確定要刪除「${title}」嗎？此操作無法復原。`
+  if (!confirm(msg)) return
+
+  const { error } = await supabase.from('courses').delete().eq('id', id)
+  if (error) { alert('刪除失敗：' + error.message); return }
+  await loadAll()
+}
+
 // ── 名單 Modal ────────────────────────────────────────────
 async function openRoster(courseId, title) {
   document.getElementById('roster-title').textContent = '報名名單 — ' + title
@@ -170,19 +186,21 @@ async function openRoster(courseId, title) {
      <span class="badge badge-blue">候補 ${wait} 人</span>`
 
   let regIdx = 0
-  document.getElementById('roster-tbody').innerHTML = rosterRows.map(r => {
-    const isWait = r.status === 'waitlisted'
-    if (!isWait) regIdx++
-    return `<tr>
-      <td>${isWait ? 'W' + r.waitlist_position : regIdx}</td>
-      <td>${r.name_snapshot || '—'}</td>
-      <td style="font-family:monospace;font-size:12px">${r.id_number_snapshot || '—'}</td>
-      <td>${r.org_type_snapshot || '—'}</td>
-      <td>${r.org_snapshot || '—'}</td>
-      <td style="font-size:12px">${new Date(r.created_at).toLocaleString('zh-TW')}</td>
-      <td><span class="badge ${isWait ? 'badge-blue' : 'badge-green'}">${isWait ? '候補' : '正取'}</span></td>
-    </tr>`
-  }).join('')
+  document.getElementById('roster-tbody').innerHTML = rosterRows.length === 0
+    ? '<tr><td colspan="7" style="text-align:center;padding:16px;color:var(--gray-400)">尚無報名紀錄</td></tr>'
+    : rosterRows.map(r => {
+        const isWait = r.status === 'waitlisted'
+        if (!isWait) regIdx++
+        return `<tr>
+          <td>${isWait ? 'W' + r.waitlist_position : regIdx}</td>
+          <td>${r.name_snapshot || '—'}</td>
+          <td style="font-family:monospace;font-size:12px">${r.id_number_snapshot || '—'}</td>
+          <td>${r.org_type_snapshot || '—'}</td>
+          <td>${r.org_snapshot || '—'}</td>
+          <td style="font-size:12px">${new Date(r.created_at).toLocaleString('zh-TW')}</td>
+          <td><span class="badge ${isWait ? 'badge-blue' : 'badge-green'}">${isWait ? '候補' : '正取'}</span></td>
+        </tr>`
+      }).join('')
 }
 
 function exportRoster() {
@@ -204,29 +222,36 @@ function exportRoster() {
 // ── QR 簽到 ───────────────────────────────────────────────
 function loadQR() {
   qrCourseId = document.getElementById('qr-select').value
-  if (!qrCourseId) { document.getElementById('qr-panel').style.display = 'none'; return }
+  if (!qrCourseId) {
+    document.getElementById('qr-panel').style.display = 'none'
+    return
+  }
   document.getElementById('qr-panel').style.display = 'block'
 
-  const url = window.location.origin + window.BASE_PATH +
+  qrUrl = window.location.origin + window.BASE_PATH +
     '/pages/checkin.html?course=' + qrCourseId +
     '&t=' + btoa(qrCourseId + ':' + new Date().toDateString())
 
-  document.getElementById('qr-link-box').textContent = url
   document.getElementById('qr-link-box').style.display = 'none'
+  document.getElementById('qr-link-box').textContent = qrUrl
 
-  const canvas = document.getElementById('qr-canvas')
-  const ctx = canvas.getContext('2d')
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  // 清空舊的 QR
+  const container = document.getElementById('qr-canvas')
+  container.innerHTML = ''
 
+  // 用 qrcodejs（需要 div 容器）
   function tryRender(retries) {
     if (typeof QRCode !== 'undefined') {
-      QRCode.toCanvas(canvas, url, { width: 200, margin: 2 }, err => {
-        if (err) console.error('QR 產生失敗:', err)
+      new QRCode(container, {
+        text:         qrUrl,
+        width:        200,
+        height:       200,
+        correctLevel: QRCode.CorrectLevel.M
       })
     } else if (retries > 0) {
       setTimeout(() => tryRender(retries - 1), 300)
     } else {
-      console.error('QRCode library 未載入')
+      container.innerHTML = '<p style="color:var(--red-500);font-size:12px">QR Code 載入失敗，請重新整理頁面</p>'
     }
   }
   tryRender(15)
@@ -269,21 +294,26 @@ async function markAtt(id) {
 function refreshAtt() { loadAtt() }
 
 function dlQR() {
-  const canvas = document.getElementById('qr-canvas')
+  // qrcodejs 產生的是 <img> 標籤
+  const img = document.querySelector('#qr-canvas img')
+  if (!img) { alert('請先選擇課程產生 QR Code'); return }
   const a = Object.assign(document.createElement('a'), {
     download: 'QR_簽到.png',
-    href: canvas.toDataURL()
+    href: img.src
   })
   a.click()
 }
 
 function copyQRLink() {
-  const box = document.getElementById('qr-link-box')
-  const url = box.textContent
-  if (!url) return
-  navigator.clipboard.writeText(url).then(() => {
+  if (!qrUrl) return
+  navigator.clipboard.writeText(qrUrl).then(() => {
+    const box = document.getElementById('qr-link-box')
     box.style.display = 'block'
-    box.textContent = '✓ 已複製：' + url
+    box.textContent = '✓ 已複製：' + qrUrl
+  }).catch(() => {
+    const box = document.getElementById('qr-link-box')
+    box.style.display = 'block'
+    box.textContent = qrUrl
   })
 }
 
@@ -360,15 +390,4 @@ function dlCSV(rows, name) {
 
 function fmtDate(d) {
   return d ? new Date(d).toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' }) : '—'
-}
-
-async function deleteCourse(id, title) {
-  if (!confirm(`確定要刪除「${title}」嗎？\n\n刪除後報名資料也會一併移除，無法復原。`)) return
-
-  const { error } = await supabase.from('courses').delete().eq('id', id)
-  if (error) {
-    alert('刪除失敗：' + error.message)
-    return
-  }
-  await loadAll()
 }
